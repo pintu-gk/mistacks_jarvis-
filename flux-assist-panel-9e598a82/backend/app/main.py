@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from app import database
-from app.routes import reader, chat   # 👈 added chat import
+from app.routes import reader, chat   # ✅ chat added
 
 logging.basicConfig(
     level=logging.INFO,
@@ -22,6 +22,7 @@ logger = logging.getLogger("jarvis")
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Ensure all required folders exist BEFORE mounting
     os.makedirs("static/audio", exist_ok=True)
     os.makedirs("static/pdfs", exist_ok=True)
     await database.init()
@@ -51,9 +52,12 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# ✅ This line is crucial – creates the root static directory
+os.makedirs("static", exist_ok=True)
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.include_router(reader.router)
-app.include_router(chat.router)        # 👈 added chat router
+app.include_router(chat.router)        # ✅ chat router added
 
 
 @app.get("/")

@@ -13,8 +13,6 @@ import {
   Bell,
   Cpu,
   Database,
-  Code2,
-  Sparkles,
   Info,
   Check,
   Trash2,
@@ -31,7 +29,7 @@ import {
   Wifi,
   AlertTriangle,
   Menu,
-
+  FileText,
 } from "lucide-react";
 import { PageShell, PageHeader } from "@/components/jarvis/PageShell";
 import { GlassCard, SectionTitle } from "@/components/jarvis/ui";
@@ -268,6 +266,7 @@ function GhostButton({
 }
 
 // ============== Settings state ==============
+// ✅ REMOVED: "developer" and "model" sections
 const SECTIONS = [
   { id: "account", label: "Account", icon: User },
   { id: "ai", label: "AI Assistant", icon: Brain },
@@ -279,8 +278,6 @@ const SECTIONS = [
   { id: "notifications", label: "Notifications", icon: Bell },
   { id: "devices", label: "Connected Devices", icon: Cpu },
   { id: "data", label: "Data Management", icon: Database },
-  { id: "developer", label: "Developer Mode", icon: Code2 },
-  { id: "model", label: "AI Model", icon: Sparkles },
   { id: "about", label: "About JARVIS", icon: Info },
 ] as const;
 
@@ -296,8 +293,6 @@ type State = {
   privacy: { mic: boolean; cam: boolean; share: boolean; saveHistory: boolean };
   notifications: { alarm: boolean; reminder: boolean; updates: boolean; security: boolean };
   devices: Record<string, boolean>;
-  developer: { debug: boolean };
-  model: { model: string; temperature: string };
 };
 
 const DEFAULTS: State = {
@@ -310,8 +305,6 @@ const DEFAULTS: State = {
   privacy: { mic: true, cam: false, share: false, saveHistory: true },
   notifications: { alarm: true, reminder: true, updates: true, security: true },
   devices: { Phone: true, Laptop: true, ESP32: false, "Smart Lights": true, Camera: false },
-  developer: { debug: false },
-  model: { model: "Gemini", temperature: "Balanced" },
 };
 
 const STORAGE_KEY = "jarvis_settings_v1";
@@ -343,10 +336,66 @@ function useSettings() {
   return { state, setState, update };
 }
 
+// ============== Legal Modal ==============
+function LegalModal({
+  open,
+  onClose,
+  title,
+  content,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  content: string;
+}) {
+  return (
+    <AnimatePresence>
+      {open && (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          exit={{ opacity: 0 }}
+          className="fixed inset-0 z-50 grid place-items-center bg-black/70 p-4 backdrop-blur-sm"
+          onClick={onClose}
+        >
+          <motion.div
+            initial={{ opacity: 0, scale: 0.95, y: 10 }}
+            animate={{ opacity: 1, scale: 1, y: 0 }}
+            exit={{ opacity: 0, scale: 0.95 }}
+            onClick={(e) => e.stopPropagation()}
+            className="glass-card relative w-full max-w-2xl max-h-[80vh] overflow-y-auto p-6"
+          >
+            <button
+              type="button"
+              onClick={onClose}
+              className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-lg text-muted-foreground hover:bg-white/5 hover:text-white"
+            >
+              <X className="h-4 w-4" />
+            </button>
+            <div className="mb-4 flex items-center gap-3">
+              <div className="grid h-11 w-11 place-items-center rounded-xl bg-cyan-300/10 text-cyan-300 ring-1 ring-cyan-300/30">
+                <FileText className="h-5 w-5" />
+              </div>
+              <h3 className="font-display text-lg font-bold tracking-wide">{title}</h3>
+            </div>
+            <div className="prose prose-invert max-w-none text-sm text-slate-300 whitespace-pre-wrap">
+              {content}
+            </div>
+            <div className="mt-6 flex justify-end">
+              <PrimaryButton onClick={onClose}>Close</PrimaryButton>
+            </div>
+          </motion.div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 // ============== Page ==============
 function Page() {
   const [active, setActive] = useState<SectionId>("account");
   const [navOpen, setNavOpen] = useState(false);
+  const [legalModal, setLegalModal] = useState<{ title: string; content: string } | null>(null);
 
   const { state, setState, update } = useSettings();
   const [saved, setSaved] = useState(false);
@@ -443,7 +492,6 @@ function Page() {
           </nav>
         </GlassCard>
 
-
         {/* Right Content */}
         <div className="min-w-0">
           <AnimatePresence mode="wait">
@@ -479,9 +527,7 @@ function Page() {
               {active === "notifications" && <NotificationsSection state={state} update={update} />}
               {active === "devices" && <DevicesSection state={state} update={update} />}
               {active === "data" && <DataSection onDeleteAll={() => setConfirmDelete("data")} />}
-              {active === "developer" && <DeveloperSection state={state} update={update} />}
-              {active === "model" && <ModelSection state={state} update={update} />}
-              {active === "about" && <AboutSection />}
+              {active === "about" && <AboutSection onOpenLegal={(title, content) => setLegalModal({ title, content })} />}
 
               <div className="flex items-center justify-end gap-3 pt-2">
                 <AnimatePresence>
@@ -530,6 +576,16 @@ function Page() {
         }}
         onCancel={() => setConfirmDelete(null)}
       />
+
+      {/* Legal Modal */}
+      {legalModal && (
+        <LegalModal
+          open={!!legalModal}
+          onClose={() => setLegalModal(null)}
+          title={legalModal.title}
+          content={legalModal.content}
+        />
+      )}
     </PageShell>
   );
 }
@@ -1155,145 +1211,135 @@ function DataSection({ onDeleteAll }: { onDeleteAll: () => void }) {
   );
 }
 
-function DeveloperSection({
-  state,
-  update,
-}: {
-  state: State;
-  update: <K extends keyof State>(k: K, p: Partial<State[K]>) => void;
-}) {
-  const stats = [
-    { label: "API Status", value: "Online", ok: true },
-    { label: "AI Model", value: "Gemini Connected", ok: true },
-    { label: "Token Usage", value: "12.4k / 100k" },
-    { label: "Server URL", value: "api.jarvis.ai", mono: true },
-  ];
-  const logs = [
-    { t: "12:04:21", msg: "Voice session started", level: "info" },
-    { t: "12:04:23", msg: "Wake word detected: 'jarvis'", level: "ok" },
-    { t: "12:04:25", msg: "Gemini response: 312ms", level: "info" },
-    { t: "12:05:01", msg: "Memory sync complete", level: "ok" },
-    { t: "12:05:42", msg: "Network latency 84ms", level: "warn" },
-  ];
-  return (
-    <>
-      <GlassCard>
-        <SectionTitle>System Status</SectionTitle>
-        <div className="grid gap-3 sm:grid-cols-2">
-          {stats.map((s) => (
-            <div key={s.label} className="rounded-xl border border-white/10 bg-white/[0.02] p-3">
-              <p className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">{s.label}</p>
-              <p className={`mt-1 text-sm font-semibold ${s.mono ? "font-mono" : ""}`}>
-                {s.ok && (
-                  <span className="mr-2 inline-block h-1.5 w-1.5 rounded-full bg-green-400 align-middle shadow-[0_0_6px_oklch(0.8_0.2_155)]" />
-                )}
-                {s.value}
-              </p>
-            </div>
-          ))}
-        </div>
-      </GlassCard>
+// ✅ REMOVED: DeveloperSection and ModelSection – they are no longer used
 
-      <GlassCard>
-        <SectionTitle>Debug</SectionTitle>
-        <Row title="Debug Mode" desc="Verbose logging and dev overlays">
-          <Toggle on={state.developer.debug} onChange={(v) => update("developer", { debug: v })} />
-        </Row>
-      </GlassCard>
+function AboutSection({ onOpenLegal }: { onOpenLegal: (title: string, content: string) => void }) {
+  // Full legal texts provided by user (with placeholders)
+  const privacyContent = `🔒 JARVIS AI Assistant — Privacy Policy
 
-      <GlassCard>
-        <SectionTitle>Logs Viewer</SectionTitle>
-        <div className="scrollbar-thin max-h-64 overflow-y-auto rounded-xl border border-white/10 bg-black/40 p-3 font-mono text-[11px]">
-          {logs.map((l, i) => (
-            <div key={i} className="flex gap-2">
-              <span className="text-muted-foreground">{l.t}</span>
-              <span
-                className={
-                  l.level === "ok"
-                    ? "text-green-400"
-                    : l.level === "warn"
-                      ? "text-amber-300"
-                      : "text-cyan-300"
-                }
-              >
-                [{l.level.toUpperCase()}]
-              </span>
-              <span className="text-white/80">{l.msg}</span>
-            </div>
-          ))}
-        </div>
-      </GlassCard>
-    </>
-  );
-}
+Last Updated: [Date]
 
-function ModelSection({
-  state,
-  update,
-}: {
-  state: State;
-  update: <K extends keyof State>(k: K, p: Partial<State[K]>) => void;
-}) {
-  const models = [
-    { value: "Gemini", label: "Gemini", desc: "Fast & multimodal" },
-    { value: "GPT", label: "GPT", desc: "Conversational" },
-    { value: "Local", label: "Local Model", desc: "On-device" },
-  ];
-  return (
-    <>
-      <GlassCard>
-        <SectionTitle>AI Model</SectionTitle>
-        <div className="grid gap-3 sm:grid-cols-3">
-          {models.map((m) => {
-            const active = state.model.model === m.value;
-            return (
-              <button
-                key={m.value}
-                type="button"
-                onClick={() => update("model", { model: m.value })}
-                className={`rounded-xl border p-4 text-left transition ${
-                  active
-                    ? "border-cyan-300/50 bg-gradient-to-br from-cyan-300/10 to-purple-500/10 shadow-[0_0_24px_oklch(0.88_0.18_210/0.25)]"
-                    : "border-white/10 bg-white/[0.02] hover:border-white/20"
-                }`}
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="font-display font-bold tracking-wide">{m.label}</p>
-                  {active && <Check className="h-4 w-4 text-cyan-300" />}
-                </div>
-                <p className="text-[11px] text-muted-foreground">{m.desc}</p>
-              </button>
-            );
-          })}
-        </div>
-      </GlassCard>
+Welcome to JARVIS AI Assistant ("we", "our", "the app"). Your privacy is important to us. This Privacy Policy explains how we collect, use, and protect your information when you use our AI assistant services.
 
-      <GlassCard>
-        <SectionTitle>Temperature</SectionTitle>
-        <Segmented
-          value={state.model.temperature}
-          onChange={(v) => update("model", { temperature: v })}
-          options={[
-            { value: "Creative", label: "Creative" },
-            { value: "Balanced", label: "Balanced" },
-            { value: "Precise", label: "Precise" },
-          ]}
-        />
-        <p className="mt-3 text-[11px] text-muted-foreground">
-          Controls how exploratory the AI responses are. Creative is more imaginative; Precise is more deterministic.
-        </p>
-      </GlassCard>
-    </>
-  );
-}
+1. Information We Collect
 
-function AboutSection() {
+JARVIS may collect:
+- User account information
+- Chat conversations with AI
+- Voice input (when voice features are enabled)
+- Uploaded files/documents (for PDF reading and analysis)
+- App usage data
+- Device information for improving performance
+
+2. How We Use Your Data
+
+Your information may be used for:
+- Providing AI assistant features
+- Processing voice commands
+- Improving user experience
+- Maintaining app security
+- Fixing bugs and improving performance
+
+3. AI Processing
+
+JARVIS uses AI services to generate responses and perform tasks. Some data may be processed through third-party AI providers required for app functionality.
+
+4. File & Document Privacy
+
+Files uploaded for features like PDF reading or analysis are used only to provide requested services.
+We do not sell, rent, or share your personal files with third parties for advertising purposes.
+
+5. Voice Data
+
+Voice commands are processed only to provide voice assistant functionality. Users can disable microphone access anytime from device settings.
+
+6. Data Security
+
+We use reasonable security measures to protect user information. However, no online service can guarantee 100% security.
+
+7. User Control
+
+Users can:
+- Delete their data
+- Disable permissions
+- Stop using AI features anytime
+
+8. Contact
+
+For privacy questions:
+Email: [your email]`;
+
+  const termsContent = `📜 JARVIS AI Assistant — Terms & Conditions
+
+Last Updated: [Date]
+
+By using JARVIS AI Assistant, you agree to these Terms & Conditions.
+
+1. Use of Service
+
+JARVIS provides AI-powered assistance including:
+- AI conversations
+- Voice assistant features
+- Document analysis
+- Productivity tools
+
+Users must use the application responsibly.
+
+2. AI Responses
+
+JARVIS uses artificial intelligence and generated responses may not always be accurate.
+Users should verify important information before making decisions.
+
+3. User Responsibilities
+
+You agree:
+- Not to misuse the application
+- Not to attempt unauthorized access
+- Not to use the service for illegal activities
+
+4. Third Party Services
+
+JARVIS may use third-party services such as:
+- AI APIs
+- Cloud services
+- Authentication providers
+
+Their own policies may apply.
+
+5. Availability
+
+We may update, modify, or improve features without prior notice.
+
+6. Limitation of Liability
+
+JARVIS is provided "as is". We are not responsible for damages caused by incorrect AI-generated information or misuse of the application.
+
+7. Changes
+
+Terms may be updated periodically.
+
+8. Contact
+
+Email: [your email]`;
+
+  const ossContent = `🧩 Open Source License
+
+MIT License
+
+Copyright (c) 2026 JARVIS AI Assistant
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and associated documentation files (the "Software"), to deal in the Software without restriction, including without limitation the rights to use, copy, modify, merge, publish, distribute, sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.`;
+
   return (
     <>
       <GlassCard>
         <div className="flex flex-col items-center gap-3 py-6 text-center">
           <div className="relative grid h-20 w-20 place-items-center rounded-3xl bg-gradient-to-br from-cyan-400/30 to-purple-500/30 ring-1 ring-cyan-300/40">
-            <Sparkles className="h-8 w-8 text-cyan-200" />
+            <Cog className="h-8 w-8 text-cyan-200" />
             <span className="absolute inset-0 animate-glow-pulse rounded-3xl" />
           </div>
           <div>
@@ -1323,23 +1369,37 @@ function AboutSection() {
       <GlassCard>
         <SectionTitle>Legal</SectionTitle>
         <div className="grid gap-2">
-          {["Privacy Policy", "Terms & Conditions", "Open Source Licenses"].map((l) => (
-            <button
-              key={l}
-              type="button"
-              className="flex min-h-11 items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-4 text-sm font-semibold transition hover:border-cyan-300/30 hover:bg-white/[0.05]"
-            >
-              {l}
-              <ChevronRight className="h-4 w-4 text-muted-foreground" />
-            </button>
-          ))}
+          <button
+            type="button"
+            onClick={() => onOpenLegal("Privacy Policy", privacyContent)}
+            className="flex min-h-11 items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-4 text-sm font-semibold transition hover:border-cyan-300/30 hover:bg-white/[0.05]"
+          >
+            Privacy Policy
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenLegal("Terms & Conditions", termsContent)}
+            className="flex min-h-11 items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-4 text-sm font-semibold transition hover:border-cyan-300/30 hover:bg-white/[0.05]"
+          >
+            Terms & Conditions
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
+          <button
+            type="button"
+            onClick={() => onOpenLegal("Open Source License", ossContent)}
+            className="flex min-h-11 items-center justify-between rounded-xl border border-white/10 bg-white/[0.02] px-4 text-sm font-semibold transition hover:border-cyan-300/30 hover:bg-white/[0.05]"
+          >
+            Open Source License
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
         </div>
       </GlassCard>
     </>
   );
 }
 
-// ============== Modal ==============
+// ============== Modals ==============
 function ConfirmModal({
   open,
   title,
