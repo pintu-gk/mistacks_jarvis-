@@ -49,7 +49,7 @@ interface FileItem {
   id: string;
   name: string;
   type: string;
-  size: number; // bytes
+  size: number;
   date: string;
   tags: string[];
   isFavorite: boolean;
@@ -72,8 +72,7 @@ interface NoteItem {
 }
 
 // ==================== API BASE ====================
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:8000";
-
+const API_BASE = "http://127.0.0.1:8000";
 async function apiFetch(endpoint: string, options?: RequestInit) {
   const res = await fetch(`${API_BASE}${endpoint}`, options);
   if (!res.ok) {
@@ -208,6 +207,10 @@ export default function FilesNotes() {
   const [newNoteTitle, setNewNoteTitle] = useState("");
   const [newNoteContent, setNewNoteContent] = useState("");
 
+  // --- Folder creation ---
+  const [folderName, setFolderName] = useState("");
+  const [showFolderDialog, setShowFolderDialog] = useState(false);
+
   // Load files and notes
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -305,6 +308,27 @@ export default function FilesNotes() {
     }
   };
 
+  // === NEW: Create Folder ===
+  const handleCreateFolder = async () => {
+    if (!folderName.trim()) {
+      toast.warning("Please enter a folder name.");
+      return;
+    }
+    try {
+      await apiFetch("/api/folders", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: folderName }),
+      });
+      toast.success(`Folder "${folderName}" created`);
+      setFolderName("");
+      setShowFolderDialog(false);
+      // Optionally, you could refresh a folder list here
+    } catch (err: any) {
+      toast.error(err.message || "Failed to create folder");
+    }
+  };
+
   // Combine files and notes into unified items for display
   const allItems: FileItem[] = [
     ...files,
@@ -392,8 +416,9 @@ export default function FilesNotes() {
         <motion.div
           variants={{
             hidden: { y: 20, opacity: 0 },
-            visible: { y: 0, opacity: 1, duration: 0.3 },
+            visible: { y: 0, opacity: 1 },
           }}
+          transition={{ duration: 0.3 }}
         >
           <Card className="rounded-xl border-white/10 bg-white/5 backdrop-blur-sm">
             <CardContent className="p-4">
@@ -429,13 +454,16 @@ export default function FilesNotes() {
                     </label>
                   </Button>
 
+                  {/* New Folder Button – opens dialog */}
                   <Button
                     variant="outline"
                     className="gap-2 border-white/10 text-gray-400 hover:border-white/20 hover:text-white"
+                    onClick={() => setShowFolderDialog(true)}
                   >
                     <FolderPlus className="h-4 w-4" /> New Folder
                   </Button>
 
+                  {/* AI Note Dialog */}
                   <Dialog
                     open={showNewNoteDialog}
                     onOpenChange={setShowNewNoteDialog}
@@ -485,6 +513,7 @@ export default function FilesNotes() {
                     </DialogContent>
                   </Dialog>
 
+                  {/* View mode toggle */}
                   <Button
                     variant="ghost"
                     size="icon"
@@ -508,8 +537,9 @@ export default function FilesNotes() {
         <motion.div
           variants={{
             hidden: { y: 20, opacity: 0 },
-            visible: { y: 0, opacity: 1, duration: 0.3 },
+            visible: { y: 0, opacity: 1 },
           }}
+          transition={{ duration: 0.3 }}
         >
           <div className="flex flex-wrap gap-2">
             {allTags.map((tag) => (
@@ -533,8 +563,9 @@ export default function FilesNotes() {
         <motion.div
           variants={{
             hidden: { y: 20, opacity: 0 },
-            visible: { y: 0, opacity: 1, duration: 0.3 },
+            visible: { y: 0, opacity: 1 },
           }}
+          transition={{ duration: 0.3 }}
         >
           {loading ? (
             <div className="flex justify-center py-12">
@@ -669,6 +700,32 @@ export default function FilesNotes() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* === NEW: Folder Creation Dialog === */}
+      <Dialog open={showFolderDialog} onOpenChange={setShowFolderDialog}>
+        <DialogContent className="bg-slate-950 border-white/10">
+          <DialogHeader>
+            <DialogTitle className="text-white">📁 New Folder</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <Input
+              placeholder="Folder name"
+              value={folderName}
+              onChange={(e) => setFolderName(e.target.value)}
+              className="bg-white/5 border-white/10 text-white placeholder:text-gray-500"
+              onKeyDown={(e) => e.key === "Enter" && handleCreateFolder()}
+            />
+          </div>
+          <div className="flex justify-end gap-2">
+            <Button variant="ghost" onClick={() => setShowFolderDialog(false)}>
+              Cancel
+            </Button>
+            <Button className="bg-blue-500 hover:bg-blue-600" onClick={handleCreateFolder}>
+              Create Folder
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </PageShell>
   );
 }
